@@ -1,0 +1,78 @@
+---
+title: "BA 64060 Assignment 1"
+author: "Madeline Witzeman"
+date: "2023-09-10"
+output:
+  html_document: default
+  pdf_document: default
+---
+## Step 1 & 2: Download dataset and Import dataset into R
+
+```{r setup, include=FALSE}
+ds <- read.csv("C:\\Users\\Madeline\\Documents\\Real_Estate_Sales_2001-2020_GL.csv")
+```
+
+## The code above assigns 'ds' as my dataset and imports the dataset into R from my Documents 
+## The dataset was downloaded from https://catalog.data.gov/dataset/real-estate-sales-2001-2018
+
+## Step 3: Print descriptive stats for quantitative and categorical variables
+
+```{r}
+
+min(ds$Assessed.Value, na.rm=TRUE)
+max(ds$Assessed.Value, na.rm=TRUE)
+range(ds$Assessed.Value, na.rm=TRUE)
+mean(ds$Assessed.Value, na.rm=TRUE)
+median(ds$Assessed.Value, na.rm=TRUE)
+sd(ds$Assessed.Value, na.rm=TRUE)
+
+min(ds$Sale.Amount, na.rm=TRUE)
+max(ds$Sale.Amount, na.rm=TRUE)
+range(ds$Sale.Amount, na.rm=TRUE)
+mean(ds$Sale.Amount, na.rm=TRUE)
+median(ds$Sale.Amount, na.rm=TRUE)
+sd(ds$Sale.Amount, na.rm=TRUE)
+
+dplyr::count(ds, Property.Type)
+dplyr::count(ds, Residential.Type)
+
+table(ds$Residential.Type)
+tablepercent <- table(ds$Residential.Type)
+prop.table(tablepercent)
+
+```
+
+## In the code above, I've chosen to print the min, max, range, mean, median, and standard deviation for the quantitative variables 'Assessed.Value' and 'Sale.Amount'
+## I also printed the count for the categorical variables 'Property. Type' and 'Residential.Type' and printed proportions or precentages for 'Residential.Type'
+
+
+## Step 4: Transform a variable
+
+```{r}
+ds = dplyr::rename(ds, Year.Listed = List.Year)
+head(ds)
+
+```
+
+## In the code above, I renamed the variable 'List.Year' to 'Year.Listed' using the dplyr package
+
+
+## Step 5: Plot a quantitative variable, including a scatterplot
+
+```{r echo = FALSE}
+
+plot(ds$Assessed.Value,ds$Sale.Amount, xlab = "Assessed Value ($)", ylab = "Sale Price ($)")
+
+```
+
+## The code above produces a scatterplot of 'Assessed.Value' and 'Sale.Amount'
+
+```{r echo = FALSE}
+
+SalePrice <- ds$Sale.Amount
+hist(SalePrice, main="Property Sales up to $1M in CT Between 2001-2020", xlab = "Sale Price ($)", breaks = "Scott", xlim = c(1,1000000))
+
+```
+
+## The code above produces a histogram of 'Sale.Amount' with the x-axis limited to values between $1 and $1,000,000 and an optimized amount of bins
+

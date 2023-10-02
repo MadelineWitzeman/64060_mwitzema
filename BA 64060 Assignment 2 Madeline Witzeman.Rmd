@@ -1,0 +1,251 @@
+---
+title: "BA 64060 Assignment 2"
+author: "Madeline Witzeman"
+date: "2023-09-27"
+output: html_document
+---
+## Problem 1:
+
+# Load bank data into R
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+bank.ds <- read.csv("C:\\Users\\Madeline\\Documents\\Kent State University\\Fall 2023 Semester\\BA 64060\\UniversalBank.csv")
+```
+
+# Load any potential required packages and create dataset with required variables (exclude ID and Zip Code)
+
+```{r}
+library(caret)
+library(ISLR)
+library(class)
+library(dplyr)
+
+new_bank.ds <- select(bank.ds,Age,Experience,Income,Family,CCAvg,Education,Mortgage,Personal.Loan,Securities.Account,CD.Account,Online,CreditCard)
+head(new_bank.ds)
+```
+
+# Partition dataset into training (60%) and validation (40%) sets
+
+```{r}
+set.seed(17)
+Train_Index = createDataPartition(new_bank.ds$Age, p=0.6, list=FALSE)
+Train_Data = new_bank.ds[Train_Index,]
+Val_Data = new_bank.ds[-Train_Index,]
+```
+
+# Convert Education and Mortgage to dummy variables in the Training and Validation sets
+# Note: For the purposes of this exercise, I assumed that Mortgage acts like the Personal.Loan, Securities.Account, CD.Account, Online, and Credit Card variables,
+# where we're not interested in the value of the account, loan, etc., but instead whether or not the customer doesn't (0) or does (1) have the loan/account/ etc.
+
+```{r}
+Train_Data$Education_1 <- ifelse(Train_Data$Education == '1', 1, 0)
+Train_Data$Education_2 <- ifelse(Train_Data$Education == '2', 1, 0)
+Train_Data$Education_3 <- ifelse(Train_Data$Education == '3', 1, 0)
+Train_Data$Mortgage_1 <- ifelse(Train_Data$Mortgage > 0, 1, 0)
+head(Train_Data)
+
+Val_Data$Education_1 <- ifelse(Val_Data$Education == '1', 1, 0)
+Val_Data$Education_2 <- ifelse(Val_Data$Education == '2', 1, 0)
+Val_Data$Education_3 <- ifelse(Val_Data$Education == '3', 1, 0)
+Val_Data$Mortgage_1 <- ifelse(Val_Data$Mortgage > 0, 1, 0)
+head(Val_Data)
+```
+
+# Select required variables after creating dummy variables
+
+```{r}
+new_Train_Data <- select(Train_Data,Age,Experience,Income,Family,CCAvg,Education_1,Education_2,Education_3,Mortgage_1,Personal.Loan,Securities.Account,CD.Account,Online,CreditCard)
+new_Val_Data <- select(Val_Data,Age,Experience,Income,Family,CCAvg,Education_1,Education_2,Education_3,Mortgage_1,Personal.Loan,Securities.Account,CD.Account,Online,CreditCard)
+head(new_Train_Data)
+head(new_Val_Data)
+```
+
+# Normalize applicable variables in the dataset (Age, Experience, Income, Family, CCAvg)
+
+```{r}
+train.norm.df <- new_Train_Data
+valid.norm.df <- new_Val_Data
+
+norm.values <- preProcess(Train_Data[,1:5], method=c("center", "scale"))
+
+train.norm.df[, 1:5] <- predict(norm.values, Train_Data[, 1:5])
+valid.norm.df[, 1:5] <- predict(norm.values, Val_Data[, 1:5])
+```
+
+# Confirming normalization has occurred (mean = 0 and var = 1 for training set)
+
+```{r}
+summary(train.norm.df)
+var(train.norm.df)
+```
+
+# Model k-NN given k = 1
+
+```{r}
+library(FNN)
+knn_Predict_k1 <- knn(train = train.norm.df[,-10], test = valid.norm.df[,-10],
+          cl = train.norm.df[, 10], k = 1, prob=TRUE)
+
+```
+
+# Predict the class of given customer using data from problem 1
+
+```{r}
+test1<- valid.norm.df[1,-10]
+test1[1,]<-c(40,10,84,2,2,0,1,0,0,0,0,1,1)
+
+test1.norm.df <- test1
+test1.norm.df[, 1:5] <- predict(norm.values, test1[, 1:5])
+
+knn_Pred_k1 <- knn(train = train.norm.df[,-10], test1.norm.df,
+                      cl = train.norm.df[, 10], k = 1, prob=TRUE)
+knn_Pred_k1
+```
+
+## Answer to Problem 1: Based on the k-nn model above, the customer is classified as non loan acceptance (0)
+
+
+## Problem 2: Determine choice of k that balances between overfitting and ignoring predictor information
+
+
+# Set up data frame with k and accuracy columns; looking at k values between 1 and 14
+
+```{r}
+accuracy.df <- data.frame(k = seq(1, 14, 1), accuracy = rep(0, 14))
+```
+
+# Compute k-nn for different k values (1 to 14) based on validation set and produce confusion matrix depicting accuracy based on varying k values
+
+```{r}
+for(i in 1:14) {
+  knn_Pred_k2 <- knn(train.norm.df[, -10], valid.norm.df[, -10], 
+                  cl = train.norm.df[, 10], k = i)
+  accuracy.df[i, 2] <- confusionMatrix(as.factor(knn_Pred_k2), as.factor(valid.norm.df[, 10]))$overall[1] 
+}
+accuracy.df
+```
+
+## Answer to Problem 2: Based on the confusion matrix generated, k = 3 has the best performance: it produces the highest accuracy and balances over and underfitting the data (using only k=1 may overfit the data)
+
+
+## Problem 3: Show the confusion matrix for the validation data based on the best k value
+
+```{r}
+Test_labels  <-valid.norm.df[,10]
+
+knn_Pred_k3 <- knn(train = train.norm.df[,-10], test = valid.norm.df[,-10],
+                   cl = train.norm.df[, 10], k = 3, prob=TRUE)
+
+confusionMatrix(as.factor(knn_Pred_k3), as.factor(valid.norm.df[,10]))  
+```
+## Problem 4: Classify given customer based on the best value for k
+
+```{r}
+test2<- valid.norm.df[1,-10]
+test2[1,]<-c(40,10,84,2,2,0,1,0,0,0,0,1,1)
+
+test2.norm.df <- test2
+test2.norm.df[, 1:5] <- predict(norm.values, test2[, 1:5])
+
+knn_Pred_k4 <- knn(train = train.norm.df[,-10], test2.norm.df,
+                   cl = train.norm.df[, 10], k = 3, prob=TRUE)
+knn_Pred_k4
+```
+
+## Answer to Problem 4: based on k=3, the customer is classified as non loan acceptance (0)
+
+
+## Problem 5: Repartition data into training (50%), validation (30%), and test (20%) sets and compare confusion matrices
+
+# Partition dataset based on percentages above (starting with training, and then partitioning the remaining data into validation and test sets)
+
+```{r}
+set.seed(20)
+Train_Index_2 = createDataPartition(new_bank.ds$Age, p=0.5, list=FALSE)
+Train_Data_2 = new_bank.ds[Train_Index_2,]
+TraVal_Data = new_bank.ds[-Train_Index,]
+
+Val_Index_2 = createDataPartition(TraVal_Data$Age,p=0.3, list=FALSE) 
+Val_Data_2 = TraVal_Data[Val_Index_2,]
+Test_Data = TraVal_Data[-Val_Index_2,] 
+```
+
+# Convert Education and Mortgage to dummy variables in the Training, Validation, and Test sets
+
+```{r}
+Train_Data_2$Education_1 <- ifelse(Train_Data_2$Education == '1', 1, 0)
+Train_Data_2$Education_2 <- ifelse(Train_Data_2$Education == '2', 1, 0)
+Train_Data_2$Education_3 <- ifelse(Train_Data_2$Education == '3', 1, 0)
+Train_Data_2$Mortgage_1 <- ifelse(Train_Data_2$Mortgage > 0, 1, 0)
+head(Train_Data_2)
+
+Val_Data_2$Education_1 <- ifelse(Val_Data_2$Education == '1', 1, 0)
+Val_Data_2$Education_2 <- ifelse(Val_Data_2$Education == '2', 1, 0)
+Val_Data_2$Education_3 <- ifelse(Val_Data_2$Education == '3', 1, 0)
+Val_Data_2$Mortgage_1 <- ifelse(Val_Data_2$Mortgage > 0, 1, 0)
+
+Test_Data$Education_1 <- ifelse(Test_Data$Education == '1', 1, 0)
+Test_Data$Education_2 <- ifelse(Test_Data$Education == '2', 1, 0)
+Test_Data$Education_3 <- ifelse(Test_Data$Education == '3', 1, 0)
+Test_Data$Mortgage_1 <- ifelse(Test_Data$Mortgage > 0, 1, 0)
+```
+
+# Select required variables after creating dummy variables above
+
+```{r}
+new_Train_Data_2 <- select(Train_Data_2,Age,Experience,Income,Family,CCAvg,Education_1,Education_2,Education_3,Mortgage_1,Personal.Loan,Securities.Account,CD.Account,Online,CreditCard)
+new_Val_Data_2 <- select(Val_Data_2,Age,Experience,Income,Family,CCAvg,Education_1,Education_2,Education_3,Mortgage_1,Personal.Loan,Securities.Account,CD.Account,Online,CreditCard)
+new_Test_Data <- select(Test_Data,Age,Experience,Income,Family,CCAvg,Education_1,Education_2,Education_3,Mortgage_1,Personal.Loan,Securities.Account,CD.Account,Online,CreditCard)
+head(new_Train_Data_2)
+head(new_Val_Data_2)
+head(new_Test_Data)
+```
+
+# Normalize applicable variables in the dataset (Age, Experience, Income, Family, CCAvg)
+
+```{r}
+train.norm.df2 <- new_Train_Data_2
+valid.norm.df2 <- new_Val_Data_2
+test.norm.df2 <- new_Test_Data
+
+norm.values <- preProcess(Train_Data_2[,1:5], method=c("center", "scale"))
+
+train.norm.df2[, 1:5] <- predict(norm.values, Train_Data_2[, 1:5])
+valid.norm.df2[, 1:5] <- predict(norm.values, Val_Data_2[, 1:5])
+test.norm.df2[, 1:5] <- predict(norm.values, Test_Data[, 1:5])
+```
+
+# Confirming normalization has occurred (mean = 0 and var = 1 for training set)
+
+```{r}
+summary(train.norm.df)
+var(train.norm.df)
+```
+
+# Apply k-nn with k=3
+
+```{r}
+knn_Pred_k5 <- knn(train = train.norm.df2[,-10], test = test.norm.df2[,-10],
+                      cl = train.norm.df2[, 10], k = 3, prob=TRUE)
+
+knn_Pred_k6 <- knn(train = train.norm.df2[,-10], test = valid.norm.df2[,-10],
+                   cl = train.norm.df2[, 10], k = 3, prob=TRUE)
+
+knn_Pred_k7 <- knn(train = train.norm.df2[,-10], test = train.norm.df2[,-10],
+                   cl = train.norm.df2[, 10], k = 3, prob=TRUE)
+```
+
+# Generate confusion matrices for test, training, and validation sets
+
+```{r}
+confusionMatrix(as.factor(knn_Pred_k5), as.factor(test.norm.df2[,10])) 
+
+confusionMatrix(as.factor(knn_Pred_k6), as.factor(valid.norm.df2[,10])) 
+
+confusionMatrix(as.factor(knn_Pred_k7), as.factor(train.norm.df2[,10]))
+```
+
+## Answer to Problem 5: the test dataset has an accuracy of 98.07%; the validation dataset has an accuracy of 96.17%;the training dataset has an accuracy of 98.12%
+## It makes sense that the training dataset has the highest accuracy given the model is most closely trained to the training set (50% of dataset). 
+## I would actually expect the test set to have the lowest accuracy since the model should be more fit to the training/validation set, but this is not reflected above. 

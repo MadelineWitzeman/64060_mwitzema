@@ -1,0 +1,136 @@
+---
+title: "BA 64060 Assignment 3"
+author: "Madeline Witzeman"
+date: "2023-10-15"
+output: html_document
+---
+# Load bank data into R
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+bank.ds.a3 <- read.csv("C:\\Users\\Madeline\\Documents\\Kent State University\\Fall 2023 Semester\\BA 64060\\UniversalBank.csv")
+```
+
+# Load any potential required packages
+
+```{r}
+library(caret)
+library(ISLR)
+library(class)
+library(dplyr)
+library(e1071)
+```
+
+# Select required variables (Online, CreditCard, Personal.Loan)
+
+```{r}
+selected.var <- select(bank.ds.a3, Online, CreditCard, Personal.Loan)
+head(selected.var)
+```
+
+# Partition dataset into training (60%) and validation (40%) sets
+
+```{r}
+set.seed(20)
+Train_Index_A3 = createDataPartition(selected.var$Online, p=0.6, list=FALSE)
+Train_Data_A3 = selected.var[Train_Index_A3,]
+Val_Data_A3 = selected.var[-Train_Index_A3,]
+```
+
+# Problem A: Create a pivot table for the training data with Online as a column variable, CreditCard as a row variable, and Loan as a secondary row variable
+
+```{r}
+Pivot1 <- table(Train_Data_A3$CreditCard, Train_Data_A3$Personal.Loan, Train_Data_A3$Online)
+rownames(Pivot1) = c("Credit 0", "Credit 1")
+colnames(Pivot1) = c("Loan 0", "Loan 1")
+ftable(Pivot1)
+```
+
+# Problem B: Calculate the probability of Loan = 1 given CreditCard = 1 and Online = 1
+
+# Probability = 47/(513+47) = 0.08392857
+```{r}
+P1 = 47/(513+47)
+P1
+```
+
+# Problem C: Create two separate pivot tables for the training data: Loan (rows) as a function of Online (columns) and Loan (rows) as a function of CreditCard (columns)
+
+```{r}
+Pivot2 <- table(Train_Data_A3$Personal.Loan,Train_Data_A3$Online)
+rownames(Pivot2) = c("Loan 0", "Loan 1")
+colnames(Pivot2) = c("Online 0", "Online 1")
+Pivot2
+
+Pivot3 <- table(Train_Data_A3$Personal.Loan,Train_Data_A3$CreditCard)
+rownames(Pivot3) = c("Loan 0", "Loan 1")
+colnames(Pivot3) = c("Credit 0", "Credit 1")
+Pivot3
+```
+
+# Problem D: Compute the following quantities:
+
+# i.) P(CC = 1 | Loan = 1) = 88/(212+88) = 0.2933333
+# ii.) P(Online = 1 | Loan = 1) = 179/(121+179) = 0.5966667
+# iii.) P(Loan = 1) = (121+179)/(1078+1622+121+179) = 0.1
+# iv.) P(CC = 1 | Loan = 0) = 822/(1878+822) = 0.3044444
+# v.) P(Online = 1 | Loan = 0) = 1622/(1078+1622) = 0.6007407
+# vi.) P(Loan = 0) = (1078+1622)/(1078+1622+121+179) = 0.9
+
+```{r}
+P2 = 88/(212+88)
+P2
+
+P3 = 179/(121+179)
+P3
+
+P4 = (121+179)/(1078+1622+121+179)
+P4
+
+P5 = 822/(1878+822)
+P5
+
+P6 = 1622/(1078+1622)
+P6
+
+P7 = (1078+1622)/(1078+1622+121+179)
+P7
+```
+
+# Problem E: Use the quantities computed above to compute the naive Bayes probability P(Loan = 1 | CC = 1, Online = 1)
+
+# Naive Bayes probability = 
+# Numerator: (88/300)*(179/300)*(300/3000) /
+# Denominator: (88/300)*(179/300)*(300/3000) + (822/2700)*(1622/2700)*(2700/3000) 
+# = 0.09611051
+
+```{r}
+P8 = ((88/300)*(179/300)*(300/3000))/(((88/300)*(179/300)*(300/3000))+((822/2700)*(1622/2700)*(2700/3000)))
+P8
+```
+
+# Problem F: Compare this value with the one obtained from the pivot table in (B). Which is a more accurate estimate?
+
+# Naive Bayes Probability = 0.09611051
+# Complete (Exact) Bayes Probability = 0.08392857
+# These values are close, but the complete Bayes probability calculated in Step B is the more accurate estimate. It is based on the exact counts for P(Loan = 1 | CC = 1, Online = 1) in the dataset. However, if we were working with a larger number of predictors, we would likely need to utilize the naive Bayes approach since the record we'd be looking to classify may not have an exact match in the dataset.
+
+# Problem G: Run naive Bayes on the data:
+
+```{r}
+bank.nb <- naiveBayes(Personal.Loan~Online+CreditCard, data= Train_Data_A3)
+bank.nb
+```
+# Compute P(Loan = 1 | CC = 1, Online = 1) based on naive Bayes output:
+# Naive Bayes probabiliy = ((0.4913862)*(0.4560506)*(0.1))/((0.4913862)*(0.4560506)*(0.1))+((0.4898369)*(0.4602570)*(0.9)))
+
+```{r}
+P9 = ((0.4913862)*(0.4560506)*(0.1))/(((0.4913862)*(0.4560506)*(0.1))+((0.4898369)*(0.4602570)*(0.9)))
+P9
+```
+# Probability based on Naive Bayes model above: 0.0994592
+# Probability from step E: 0.09611051
+# These probabilities are very close
+
+# Which of the entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)?
+# In the naive Bayes output, the P(CC = 1 | Loan = 1), P(Online = 1 | Loan = 1), P(Loan = 1), P(CC = 1 | Loan = 0), P(Online = 1 | Loan = 0), and P(Loan = 0) were needed for computing P(Loan = 1 | CC = 1, Online = 1).

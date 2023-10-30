@@ -1,0 +1,132 @@
+---
+title: "BA 64060 Assignment 4"
+author: "Madeline Witzeman"
+date: "2023-10-29"
+output: html_document
+---
+# Load data into R
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pharm.ds <- read.csv("C:\\Users\\Madeline\\Documents\\Kent State University\\Fall 2023 Semester\\BA 64060\\Pharmaceuticals.csv")
+```
+
+# Step a:
+
+# Load any potential required packages (after they've already been installed)
+
+```{r}
+library(tidyverse)
+library(factoextra)
+set.seed(11)
+```
+
+# Set row names as the company name column, select columns required for clustering (3 through 11) and display summary statistics
+
+```{r}
+pharm.ds2 <- pharm.ds
+row.names(pharm.ds2) <- pharm.ds2[,2]
+pharm.ds2 <- pharm.ds2[,c(3,4,5,6,7,8,9,10,11)]
+row.names(pharm.ds2)
+summary(pharm.ds2)
+```
+# I'm going to create my first k-means clustering algorithm using the Euclidean distance since it is the default method for numerical data. Since the Euclidean distance is sensitive to scale, I need to normalize the data (z-score):
+
+```{r}
+pharm.ds3 <- scale(pharm.ds2)
+distance <- get_dist(pharm.ds3)
+fviz_dist(distance)
+```
+
+# Determine the best value for k using an "elbow" chart
+
+```{r}
+fviz_nbclust(pharm.ds3, kmeans, method = "wss")
+```
+
+# The output above displays that around 5 - 6 is the ideal value for k (slope stops being as steep)
+
+# Determine the best value for k using the Silhouette Method; compare to "elbow" chart results
+
+```{r}
+fviz_nbclust(pharm.ds3, kmeans, method = "silhouette")
+```
+# The silhouette chart displays that 5 is the ideal value for k. I'm selecting k = 5 given both charts show it as an optimal value.
+
+# Run k-means using k = 5, number of restarts = 25
+
+```{r}
+k5 <- kmeans(pharm.ds3, centers = 5, nstart = 25) 
+fviz_cluster(k5, data = pharm.ds3)
+k5$cluster
+```
+
+# Display the centroids:
+
+```{r}
+k5$centers
+```
+
+# Display the size of each cluster:
+
+```{r}
+k5$size
+```
+# Based on my experience as an undergraduate accounting major, several of the variables being used to cluster the firms would likely be correlated. When conducting financial analysis on a firm, the variables in this dataset are commonly grouped into categories of financial ratios. For example: ROA and net profit margin are both considered to be profitability ratios because they utilize similar figures from a balance sheet/income statement and therefore may be correlated.
+
+# Additionally, a glance at the summary statistics reveals there may be outliers in the dataset. Given the Euclidean distance is sensitive to outliers and ignores correlation, I'm going to cluster the data again using another distance to see the output. I've chosen the Manhattan Distance for this exercise.
+
+# Run k-means again using k = 5 (based on previous "elbow" and silhouette methods) using the Manhattan Distance:
+
+```{r}
+library(flexclust)
+set.seed(101)
+km5 = kcca(pharm.ds3, k=5, kccaFamily("kmedians"))
+km5
+```
+# Apply predict function
+
+```{r}
+clusters_index <- predict(km5)
+dist(km5@centers)
+image(km5)
+points(pharm.ds3, col=clusters_index, pch=19, cex=0.3)
+
+
+```
+# The k-means algorithm using the Manhattan distance definitely produces a different clustering result with the majority of the dataset being clustered into 2 groups (as opposed to 1 group using the Euclidean distance). Additionally, one of the clusters in this output only contains 1 data point.
+
+# When looking at the clustering diagram above, it seems the data points don't fall as tightly within the clusters as they did when the Euclidean distance was utilized. Additionally, one of the clusters only contains one data point which makes me question if the number of clusters needs to be adjusted when using the Manhattan distance. For the purposes of this analysis though, I'm going to proceed with k = 5 since the elbow and Silhouette methods determined this to be optimal. After seeing both outputs of k-means algorithms using the Euclidean and Manhattan distance, I'm going to proceed with the Euclidean distance method because the clusters seem to be more compact when utilizing the "optimal" value of k = 5.
+
+# Display k-means algorithm using k = 5 and Euclidean distance again:
+
+```{r}
+k5 <- kmeans(pharm.ds3, centers = 5, nstart = 25) 
+fviz_cluster(k5, data = pharm.ds3)
+k5$cluster
+```
+
+
+# Problem b: Interpret the clusters with respect to the numerical variables used in forming the clusters.
+
+# Cluster 1 is characterized by high market capital, high ROE, high ROA, and high asset turnover.
+# Cluster 2 is the largest cluster and is characterized by average market capital, beta, price/earnings ratio, average to above-average ROA, and above average net profit margin. It also represents a relatively wide range of ROE, leverage, and estimated revenue growth values.
+# Cluster 3 is characterized by similar beta values, high price/earnings ratio, and low ROE ROA, net profit margin.
+# Cluster 4 is characterized by below average ROE, ROA, and asset turnover with high estimated revenue growth.
+# Cluster 5 is characterized by low market capital, ROA, asset turnover, estimated revenue growth, net profit margin. It also represents high beta and extreme leverage (high or low).
+
+# Problem c: Is there a pattern in the clusters with respect to the numerical variables (10 to 12)? Yes...
+
+# Cluster 1 is all NYSE and almost all US and either a hold or moderate buy
+# Cluster 2 is all NYSE, mostly US, and 50% hold
+# Cluster 3 doesn't show a particular pattern
+# Cluster 4 is all NYSE with a mix of countries and 50/50 split of moderate buy/moderate sell
+# Cluster 5 is a unique mix representing various stock exchanges and a location outside of the US
+
+# Problem d: Provide an appropriate name for each cluster using any or all of the variables in the dataset.
+
+# Cluster 1 Name: Hold/Buy these prominent companies (high ROE & ROA)
+# Cluster 2 Name: The average mix with high net profit margin
+# Cluster 3 Name: High price/earnings; low ROE, ROA, & net profit margin
+# Cluster 4 Name: Global mix with low ROE, ROA, & asset turnover but high estimated revenue growth
+# Cluster 5 Name: Unique stock exchange mix with mostly low variables; extreme beta & leverage

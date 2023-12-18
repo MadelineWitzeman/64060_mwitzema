@@ -1,0 +1,250 @@
+---
+title: "BA 64060 Final Exam"
+author: "Madeline Witzeman"
+date: "2023-12-16"
+output: html_document
+---
+# Load data into R
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+fuel.ds <- read.csv("C:\\Users\\Madeline\\Documents\\Kent State University\\Fall 2023 Semester\\BA 64060\\fuel_data_final_exam.csv")
+```
+
+# Load any potential required packages (after they've already been installed)
+
+```{r}
+library(tidyverse) 
+library(factoextra)
+library(cluster)
+library(dplyr)
+library(caret)
+library(ISLR)
+library(class)
+```
+
+# Set seed and randomly sample 2% of the dataset
+
+```{r}
+set.seed(2534)
+fuel.ds2 <- slice_sample(fuel.ds, prop = .02)
+```
+
+# Determining some information about categorical variables:
+
+```{r}
+dplyr::count(fuel.ds2, fuel_group_code)
+dplyr::count(fuel.ds2, supplier_name)
+dplyr::count(fuel.ds2, contract_type_code)
+```
+
+# Up front data exploration - what natural trends are displayed?
+
+# Data was collected between 2008 and 2023.
+# Natural gas is the most repsented fuel type in the dataset; coal is the second most represented fuel type; petroleum the third; and other gas and petroleum coke are very minimally represented.
+# There are 1,543 different suppliers represented in the sample dataset.
+# The sample dataset is roughly a 50/50 blend of Contract and Spot Purchase contract types. 
+# Each category of fuel seems to have a mix of similar fuel_mmbtu_per_unit, sulfur_content_pct, and ash_content_pct. This makes sense since these variables are based on the content of the fuel itself. 
+
+
+# Problem Statement: Assume that there is interest in converting coal power plants to natural gas power plants given the environmental and health concerns associated with the usage of coal. What fuel deliveries/power plants would serve as a good example of utilizing natural gas at a reasonable cost?
+
+# To address this problem, I'm going to use k-means clustering to generate insights relating to the fuel deliveries.
+
+# Set row names as the rowid column, remove variables with significant missing values, removed other variables not desired for analysis, and display summary statistics
+
+```{r}
+fuel.ds3 <- fuel.ds2
+row.names(fuel.ds3) <- fuel.ds3[,1]
+fuel.ds3 <- fuel.ds3[,c(2, 11, 12, 13, 14, 16)]
+row.names(fuel.ds3)
+summary(fuel.ds3)
+```
+
+# Rationale for selecting columns for analysis:
+
+# I first removed all columns containing significant missing data (contract_expiration_date, mine_id_pudl, mercury_content_ppm, primary_transportation_mode_code, secondary_transportation_mode_code, natural_gas_transport_code, natural_gas_delivery_contract_type_code, moisture_content_pct, and chlorine_content_ppm). For now, I did keep fuel_cost_per_mmbtu even though it has missing values (will explain in later section).
+
+# Next, I removed the report_date column because I wanted this analysis to focus on the content of the fuel transactions themselves, not the date. I will separately examine report dates after the clusters have formed.
+
+# Lastly, I removed all categorical variables because I'm going to utilize k-means clustering analysis. Clustering analyses (particularly k-means) cannot accommodate categorical variables since clustering is based on the concept of calculating distances between records. Clustering analysis can utilize binary variables, but I didn't see a logical way to convert the categorical variables to binary variables since most of the categorical variables have multiple levels. Additionally, several of the categorical variables seemed to be repetitive. For example, energy_source_code, fuel_type_code_pudl, and fuel_group_code all seem to be communicating relatively the same information. Also, fuel_mmbtu_per_unit, sulfur_content_pct, and ash_content_pct combined seem to largely determine the fuel type.
+
+# Examine the remaining variable classes
+
+```{r}
+print(class(fuel.ds3[,1]))
+print(class(fuel.ds3[,2]))
+print(class(fuel.ds3[,3]))
+print(class(fuel.ds3[,4]))
+print(class(fuel.ds3[,5]))
+print(class(fuel.ds3[,6]))
+```
+# These data types are acceptable
+
+# Since I kept the fuel_cost_per_mmbtu and it has missing values, I need to impute the missing values before proceeding with the clustering analysis. For this analysis, I want to utilize the fuel cost data since it seems like valuable information and is numeric. I feel it's reasonable to do so given ~70% of the records have data for the fuel cost. The rest will be imputed with the mean of fuel costs present.
+
+```{r}
+fuel.ds3$fuel_cost_per_mmbtu[is.na(fuel.ds3$fuel_cost_per_mmbtu)] <- mean(fuel.ds3$fuel_cost_per_mmbtu,na.rm = TRUE)
+summary(fuel.ds3)
+```
+# The mean fuel cost didn't change as a result of the imputing, but the median did increase some. When looking at the summary statistics for the fuel cost prior to imputing, the fuel cost definitely has some right skew given the mean > median. Additionally,there are no longer any 'NA's', which implies the imputing was successful.
+
+# I decided to use k-means clustering for this project to discover trends about fuel deliveries to power plants given this is a relatvely large dataset (k-means is less computationally intensive than hierarchical clustering). Additionally, in my opinion it makes more sense to visualize clusters of fuel transactions as opposed to a hierarchical structure.
+
+# I'm going to utilize the Euclidean distance since it is generally the default method for numerical data and I don't have much knowledge relating to the subject of this project (fuel deliveries). I need to normalize the data since many distance metrics used in clustering analysis (especially the Euclidean distance) are sensitive to scale.
+
+```{r}
+fuel.ds4 <- scale(fuel.ds3)
+distance <- get_dist(fuel.ds4)
+```
+
+# Determine the best value for k using an "elbow" chart
+
+```{r}
+fviz_nbclust(fuel.ds4, kmeans, method = "wss")
+```
+
+# The output above displays that around 4 or 5 is the ideal value for k (slope stops being as steep)
+
+# Determine the best value for k using the Silhouette Method; compare to "elbow" chart results
+
+```{r}
+fviz_nbclust(fuel.ds4, kmeans, method = "silhouette")
+```
+
+# The silhouette chart displays that 9 is the ideal value for k, which contradicts the elbow chart. The silhoutte chart also displays that 5 is the next best value for k. I'm selecting k = 5 given both charts show it as an optimal value.
+
+# Run k-means using k = 5, number of restarts = 25
+
+```{r}
+set.seed(12)
+fuel_k1 <- kmeans(fuel.ds4, centers = 5, nstart = 25) 
+fviz_cluster(fuel_k1, data = fuel.ds4)
+fuel_k1$cluster
+fuel_k1$size
+```
+
+# After viewing the cluster plot based on k = 5, I see that cluster 3 contains only 2 records and they are buried on the cluster plot. I'm going to rerun the clustering analysis with varying values of k and see how that affects the output.
+
+# Beginning with k = 4 since cluster 1 looks like it may need to be absorbed into other clusters, plus the elbow chart revealed k = 4 as a potential optimal value
+
+```{r}
+set.seed(101)
+fuel_k2 <- kmeans(fuel.ds4, centers = 4, nstart = 25) 
+fviz_cluster(fuel_k2, data = fuel.ds4)
+fuel_k2$cluster
+fuel_k2$size
+```
+
+# After re-running the clusering analysis using k = 4, I encountered the same issue as k = 5. Cluster 1 is buried on the chart with only 2 records in the cluster.
+
+# I'm going to increase k to 9 to see how that affects the chart (optimal value according to silhouette chart)
+
+```{r}
+set.seed(59)
+fuel_k3 <- kmeans(fuel.ds4, centers = 9, nstart = 25) 
+fviz_cluster(fuel_k3, data = fuel.ds4)
+fuel_k3$cluster
+fuel_k3$size
+```
+
+# After running the clustering for a third time, there are a couple things I'm noticing:
+# The basic shape of the chart is the same regardless of the k value -- looks like a 'v' shape.
+# There are 2 data points that always are assigned to their own cluster, which implies to me that they may be outliers. After inspecting one of the records assigned to cluster 1 (record 370201) I can see that it is indeed an outlier. Record 370201 has the maximum fuel cost of 19201.88. I can't determine what the other record assigned to cluster one is based on these outputs, but I'm going to assume it may record 661089 which has the next highest fuel cost of 8781.257.
+# Additionally, record 24791 contains the third highet fuel cost (4310.188). I'm going to be aware of these 3 records moving forward, but given the Euclidean distance is sensitive to outliers, I'm going to remove these 3 records and see how that affects the clustering analysis. I noticed some of these records during the summary statistics output during an earlier step, but kept them in the analysis in an attempt to preserve/represent all data. It appears these records are truly outliers that are negatively impacting the clustering though and should be removed.
+# Lastly, I did notice that the minimum fuel cost in the sample is a negative value (-0.025). When reviewing the population data, I noticed there are some negative fuel costs ranging as low as -71.93. I'm not sure how/why fuel costs would be recorded as a negative (seems like it could be an error), but since some negative values are represented in the population I am keeping them in the sample. The negative values don't seem to be as extreme of outliers as the highest fuel costs, either.
+
+# Remove outliers (records 370201, 661089, 24791)
+
+```{r}
+fuel.ds5 <- fuel.ds2
+row.names(fuel.ds5) <- fuel.ds5[,1]
+fuel.ds5 <- fuel.ds5[,c(2, 11, 12, 13, 14, 16)]
+row.names(fuel.ds5)
+fuel.ds6 <- fuel.ds5[!(row.names(fuel.ds5) %in% c("370201","661089", "24791")),]
+summary(fuel.ds6)
+```
+# The maximum fuel_cost_per_mmbtu is now down to 1395.574 and the mean also dropped from 9.083 to 6.214. I believe this is acceptable moving forward since the actual full dataset does contain some extreme fuel costs, up to 562572.16. The sample is now less skewed, but still representative of the total population.
+
+# Impute the missing fuel cost data
+
+```{r}
+fuel.ds6$fuel_cost_per_mmbtu[is.na(fuel.ds6$fuel_cost_per_mmbtu)] <- mean(fuel.ds6$fuel_cost_per_mmbtu,na.rm = TRUE)
+summary(fuel.ds6)
+```
+# Normalize the data
+
+```{r}
+fuel.ds7 <- scale(fuel.ds6)
+distance <- get_dist(fuel.ds7)
+```
+
+# Determine the new best value of k using the "elbow" chart
+
+```{r}
+fviz_nbclust(fuel.ds7, kmeans, method = "wss")
+```
+
+# The output above displays that around 5 or 6 is the ideal value for k (slope stops being as steep)
+
+# Determine the best value for k using the Silhouette Method; compare to "elbow" chart results
+
+```{r}
+fviz_nbclust(fuel.ds7, kmeans, method = "silhouette")
+```
+# The silhouette chart displays that 10 is the ideal value for k, which differs from the elbow chart. 
+
+# Run k-means using k = 5, number of restarts = 25
+
+```{r}
+set.seed(129)
+fuel_k4 <- kmeans(fuel.ds7, centers = 5, nstart = 25) 
+fviz_cluster(fuel_k4, data = fuel.ds7)
+fuel_k4$cluster
+fuel_k4$size
+```
+# After removing the 3 records with the maximum fuel cost in the sample, the clusters are more defined. Removing the 3 records affected the mean which would have affected the imputing of values as well. 
+
+# Out of curiosity, run k-means using k = 10, number of restarts = 25
+
+```{r}
+set.seed(129)
+fuel_k5 <- kmeans(fuel.ds7, centers = 10, nstart = 25) 
+fviz_cluster(fuel_k5, data = fuel.ds7)
+fuel_k5$cluster
+fuel_k5$size
+```
+# Again, the output is still the same general shape as k = 5, but more clusters have been added. It looks like there's significant overlap between clusters 10, 3, and 6. Adding more clusters in this scenario doesn't appear to generate additional insight. 
+
+# For the final analysis, I am reverting back to k = 5:
+
+```{r}
+set.seed(129)
+fuel_k4 <- kmeans(fuel.ds7, centers = 5, nstart = 25) 
+fviz_cluster(fuel_k4, data = fuel.ds7)
+fuel_k4$cluster
+fuel_k4$size
+```
+
+# Questions/topics I want to address during the analysis:
+
+# 1.) What is the most costly fuel? Least costly?
+# 2.) Confirm what fuels have the highest sulfer and ash content? Lowest of both?
+# 3.) Describe the clusters produced.
+# 4.) Recommendation on power generation in the US + what cluster(s) represent good examples of predominantly natural gas transactions at a reasonable price?
+
+# Answers:
+
+# 1.) Although natural gas can definitely have below average costs, it is disproportionately represented among the highest fuel costs. Coal is disproportionately represented among the lowest fuel costs.
+
+# 2.) Coal burns the hottest with the highest amount of ash and sulfur. Natural gas has no ash or sulfur content, has the lowest heat content, and therefore burns the cleanest.
+
+# 3.) Cluster descriptions:
+
+# Cluster 1: The second largest cluster, representing 3118 records. This cluster is characterized by predominantly coal fuel type and high sulfur and ash content. Also represents below average fuel cost. Could be referred to as the low cost, "dirty" fuel cluster.
+# Cluster 2: The second smallest cluster, with 629 records represented. This cluster is characterized by predominantly natural gas fuel type with very large amounts of fuel received and average to below average fuel cost. Large amounts of natural gas received is the defining characteristic of this cluster.
+# Cluster 3: The medium-sized cluster representing 2946 records. This cluster is characterized by predominantly natural gas with average to above average amounts of fuel received and average to below average fuel costs. Most records in this cluster were spot purchases. This is the lower cost, average/above average fuel received, spot purchases of natural gas cluster. 
+# Cluster 4: The smallest cluster, representing 8 records. This cluster is characterized by natural gas with very minimal amounts of fuel received and very high fuel costs. All records in this cluster were spot purchases. This could be considered as the outlier cluster -- unique occasions.
+# Cluster 5: The largest cluster, representing 6567 records. This cluster is characterized by a blend of natural gas and coal fuel types, with no noticeable pattern to the amount of fuel received or fuel cost. Represents wide range of plant IDs and report dates. "Catch-all" cluster representing diverse set of records. 
+
+# 4.) Although it can come at a higher cost, natural gas is the cleanest form of fossil fuel available today. There may be scenarios where coal and petroleum are still appropriate, but power plants should generally trend in favor of natural gas. The power plants in clusters 2 and 3 should serve as model examples for energy usage in the US given their high reliance on natural gas at a reasonable price. Depending on the desired contract type (contract vs. spot), one could focus more on either cluster 2 (more contract) or cluster 3 (mostly spot). 
